@@ -15,6 +15,7 @@ class MultilayerPerceptron(tf.keras.Model):
         self.MLP = tf.keras.Model(inputs=inputs, outputs=outputs, name='deepCCA')
         self.MLP.summary()
         self.MLP.compile()
+        #tf.keras.utils.plot_model(self.MLP, to_file='model.png', show_shapes=True)
 
     def _connect(self, network_data, view_idx):
         init_input = tf.keras.Input(shape=network_data[0][0],
