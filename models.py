@@ -3,18 +3,31 @@ import tensorflow as tf
 class MultilayerPerceptron(tf.keras.Model):
     def __init__(self, network_data, l_rate=.01, m_rate=.0, views=2):
         super(MultilayerPerceptron, self).__init__()
-        self.optimizer = tf.keras.optimizers.SGD(learning_rate=l_rate,
-                                                 momentum=m_rate)
 
-        inputs, outputs = [], []
-        for view_idx in range(views):
-            tmp_input, tmp_output = self._connect(network_data, view_idx)
-            inputs.append(tmp_input)
-            outputs.append(tmp_output)
 
-        self.MLP = tf.keras.Model(inputs=inputs, outputs=outputs, name='deepCCA')
+        input_v1 = tf.keras.Input(shape=(196,), name=f'Input_Layer_1')
+        hidden_layer_1_v1 = tf.keras.layers.Dense(1024, activation='sigmoid', name=f'View_1_Layer_H1') \
+            (input_v1)
+        hidden_layer_2_v1 = tf.keras.layers.Dense(1024, activation='sigmoid', name=f'View_1_Layer_H2') \
+            (hidden_layer_1_v1)
+        hidden_layer_3_v1 = tf.keras.layers.Dense(1024, activation='sigmoid', name=f'View_1_Layer_H3') \
+            (hidden_layer_2_v1)
+        output_v1 = tf.keras.layers.Dense(196, activation='linear', name=f'View_1_Output_Layer') \
+            (hidden_layer_3_v1)
+
+        input_v2 = tf.keras.Input(shape=(196,), name=f'Input_Layer_1')
+        hidden_layer_1_v2 = tf.keras.layers.Dense(1024, activation='sigmoid', name=f'View_2_Layer_H1') \
+            (input_v2)
+        hidden_layer_2_v2 = tf.keras.layers.Dense(1024, activation='sigmoid', name=f'View_2_Layer_H2') \
+            (hidden_layer_1_v2)
+        hidden_layer_3_v2 = tf.keras.layers.Dense(1024, activation='sigmoid', name=f'View_2_Layer_H3') \
+            (hidden_layer_2_v2)
+        output_v2 = tf.keras.layers.Dense(196, activation='linear', name=f'View_2_Output_Layer') \
+            (hidden_layer_3_v2)
+
+        self.MLP = tf.keras.Model(inputs=[input_v1, input_v2], outputs=[output_v1, output_v2], name='deepCCA')
+        self.MLP.compile(optimzer=tf.keras.optimizers.SGD(learning_rate=l_rate, momentum=m_rate))
         self.MLP.summary()
-        self.MLP.compile()
         #tf.keras.utils.plot_model(self.MLP, to_file='model.png', show_shapes=True)
 
     def _connect(self, network_data, view_idx):
