@@ -1,8 +1,9 @@
+import tensorflow as tf
 import numpy as np
 import scipy.io
 from sklearn.model_selection import StratifiedKFold
-import tensorflow as tf
-from models import compute_termination_score
+from sklearn.svm import LinearSVC as SVM
+from sklearn.metrics import accuracy_score
 
 def batch_data(data, batch_size):
     channels, samples = data.shape
@@ -17,6 +18,10 @@ def batch_data(data, batch_size):
 
 
 def prepare_data(data, batch_size):
+    '''
+        Used to make batches of data. Either batching data into multiple batches which makes
+        use of 'batch_data()' (if-case) or just converts to tensor and adds one dimension (else-case)
+    '''
     proc_data, batches = list(), dict()
     
     for view_idx, view_data in enumerate(data):
@@ -106,6 +111,16 @@ def load_data(artefact_removal=True):
     
     return eeg_data, meg_data, labels
 
+
+def compute_termination_score(train_data, train_labels, test_data, test_labels):
+    assert train_data.shape[0] == train_labels.shape[0]
+    assert test_data.shape[0] == test_labels.shape[0]
+    svm_model = SVM(random_state=333)
+    svm_model.fit(train_data.numpy(), train_labels)
+    predictions = svm_model.predict(test_data.numpy())
+    return accuracy_score(test_labels, predictions)
+
+
 def track_validation_progress(model, data, train_labels, validation_labels):
     train_fy_1, train_fy_2 = model([data[0]['train'][0], data[1]['train'][0]])
     train_fy = tf.concat([train_fy_1, train_fy_2], axis=1)
@@ -133,6 +148,7 @@ def track_test_progress(model, data, train_labels, validation_labels, test_label
     
     return compute_termination_score(train_val_concat, train_val_labels, test_concat, test_labels)
 
+
 def test_raw_single(train_data, train_labels, validation_data, validation_labels, test_data, test_labels):
     view_1 = tf.concat([train_data[0].T, validation_data[0].T], axis=0)
     view_2 = tf.concat([train_data[1].T, validation_data[1].T], axis=0)
@@ -144,6 +160,7 @@ def test_raw_single(train_data, train_labels, validation_data, validation_labels
     score_view2 = compute_termination_score(view_2, labels_2, tf.convert_to_tensor(test_data[1].T), test_labels[1])
     
     return [score_view1, score_view2]
+
 
 def test_raw(train_data, train_labels, validation_data, validation_labels, test_data, test_labels):
     view_1 = tf.concat([train_data[0].T, validation_data[0].T], axis=0)

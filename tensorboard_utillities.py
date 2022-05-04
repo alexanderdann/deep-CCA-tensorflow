@@ -6,8 +6,7 @@ import numpy as np
 from numpy.polynomial.polynomial import Polynomial
 from numpy.polynomial.polynomial import polyval
 
-from correlation_analysis import CCA, PCC_Matrix
-
+from correlation_analysis import PCC_Matrix
 
 
 def create_writer(root_dir):
