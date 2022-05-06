@@ -5,7 +5,6 @@ import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
 from tqdm import tqdm
 import cv2
-from sklearn.utils import gen_batches
 import shutil
 from correlation_analysis import CCA
 from sklearn.manifold import TSNE
@@ -51,8 +50,7 @@ def train(hidden_layers, shared_dim, data, max_epochs, log_path, model_path, bat
     
     model = build_deepCCA_model(input_dims, hidden_layers, shared_dim, activation)
     termination_condition = False
-    score_history = dict(zip(['validation', 'test'], [list(), list()]))
-  
+    score_history = dict(zip(['validation'], [list()]))
     
     for epoch in range(max_epochs):
         if termination_condition:
@@ -87,16 +85,13 @@ def train(hidden_layers, shared_dim, data, max_epochs, log_path, model_path, bat
                 Using all data to track the SVM accuracy and different losses over time in TensorBoard.
             '''
             validation_score = track_validation_progress(model, final_data, data[0]['train']['labels'], data[0]['validation']['labels'])
-            test_score = track_test_progress(model, final_data, data[0]['train']['labels'], data[0]['validation']['labels'], data[0]['test']['labels'])
             
             score_history['validation'].append(validation_score)
-            score_history['test'].append(test_score)
             
             static_part = [(loss, 'Loss/Total'),
                            (cca_loss, 'Loss/CCA'),
                            (reg_loss, 'Loss/Regularization'),
-                           (validation_score, 'Score/Validation Accuracy'),
-                           (test_score, 'Score/Test Accuracy')]
+                           (validation_score, 'Score/Validation Accuracy')]
             
             write_scalar_summary(
                 writer=writer,
@@ -147,9 +142,10 @@ def train(hidden_layers, shared_dim, data, max_epochs, log_path, model_path, bat
     finally:
         model_name = '-'.join(params)
         model.save(f'{model_path}/{model_name}', overwrite=True)
-            
-    return score_history['test'][-1]
-
+    
+    
+    return track_test_progress(model, final_data, data[0]['train']['labels'], data[0]['validation']['labels'], data[0]['test']['labels'])
+    
 
 desc = f'GridSearch'
 LOGROOT = f'{os.getcwd()}/LOG/{desc}'
@@ -186,7 +182,7 @@ with tf.summary.create_file_writer(LOGROOT).as_default():
     metrics=[hp.Metric(METRIC_ACCURACY, display_name=f'Mean SVM accuracy over {num_folds}-folds')],
   )
 
-def start_grid_search(hparams, list_count):
+def start_grid_search(hparams):
     '''
         Running gridsearch for a specific combination and resetting the seed to minimize random effects.
         In case an error is happening we just append a 0 as the accuracy for this run and we whole gridsearch
@@ -201,7 +197,7 @@ def start_grid_search(hparams, list_count):
                             shared_dim=hparams[HP_SHARED_DIMENSION],
                             activation=hparams[HP_ACTIVATION],
                             data=[eeg_data[fold_idx], meg_data[fold_idx]],
-                            max_epochs=100, 
+                            max_epochs=250, 
                             log_path=LOGPATH, model_path=MODELSPATH, 
                             batch_size=None, 
                             iter_idx=fold_idx)
@@ -215,10 +211,10 @@ def start_grid_search(hparams, list_count):
     return tf.math.reduce_mean(accs)
 
 
-def run(pathy, hparams, idxs):
-    with tf.summary.create_file_writer(pathy).as_default():
+def run(log_path, hparams):
+    with tf.summary.create_file_writer(log_path).as_default():
         hp.hparams(hparams)
-        accuracy = start_grid_search(hparams, clist)
+        accuracy = start_grid_search(hparams)
         tf.summary.scalar(METRIC_ACCURACY, accuracy, step=1)
 
         
@@ -235,9 +231,6 @@ for num_layers_idx, num_layers in enumerate(HP_NUM_LAYERS.domain.values, 0):
                 }
                     
                 LOGPATH = f'{LOGROOT}/Grid {session_num}'
-                with tf.summary.create_file_writer(LOGPATH).as_default():
-                    hp.hparams(hparams)
-                    accuracy = start_grid_search(hparams, None)
-                    tf.summary.scalar(METRIC_ACCURACY, accuracy, step=1)
+                run(LOGPATH, hparams)
                         
                 session_num += 1

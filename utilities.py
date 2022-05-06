@@ -1,9 +1,17 @@
 import tensorflow as tf
 import numpy as np
 import scipy.io
+from sklearn.utils import gen_batches
 from sklearn.model_selection import StratifiedKFold
 from sklearn.svm import LinearSVC as SVM
 from sklearn.metrics import accuracy_score
+
+"""
+    Used to suppress the warning related to very big dataset in the SVM and track_test_progress
+"""
+from sklearn.utils.testing import ignore_warnings
+from sklearn.exceptions import ConvergenceWarning
+
 
 def batch_data(data, batch_size):
     channels, samples = data.shape
@@ -136,6 +144,7 @@ def compute_termination_score(train_data, train_labels, test_data, test_labels):
     return accuracy_score(test_labels, predictions)
 
 
+@ignore_warnings(category=ConvergenceWarning)
 def track_validation_progress(model, data, train_labels, validation_labels):
     train_fy_1, train_fy_2 = model([data[0]['train'][0], data[1]['train'][0]])
     train_fy = tf.concat([train_fy_1, train_fy_2], axis=1)
@@ -146,6 +155,7 @@ def track_validation_progress(model, data, train_labels, validation_labels):
     return compute_termination_score(train_fy, train_labels, val_fy, validation_labels)
 
 
+@ignore_warnings(category=ConvergenceWarning)
 def track_test_progress(model, data, train_labels, validation_labels, test_labels):
     train_fy_1, train_fy_2 = model([data[0]['train'][0], data[1]['train'][0]])
     train_fy = tf.concat([train_fy_1, train_fy_2], axis=1)
