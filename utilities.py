@@ -42,28 +42,43 @@ def prepare_data(data, batch_size):
     return proc_data, batches
 
 
-def _split_data(data, labels):
+def _split_data(eeg_data, meg_data, labels):
     '''
         A split of approximately 90/5/5 (training/validation/test) is fixed. 
         Since we have 172 trials and flatten the data we need to increase the 
         size to new labels variables to fit the flattened version.
     '''
     
-    full_data = list()
-    for train_idx, tmp_idx in StratifiedKFold(n_splits=10).split(data, labels):
-        X_train, y_train = np.concatenate(data[train_idx], axis=0), np.array([label*np.ones(161) for label in labels[train_idx]]).flatten()
-        X_tmp, y_tmp = data[tmp_idx], labels[tmp_idx]
+    full_data_eeg = list()
+    full_data_meg = list()
+    for train_idx, tmp_idx in StratifiedKFold(n_splits=10).split(eeg_data, labels):
+        eeg_X_train, eeg_y_train = np.concatenate(eeg_data[train_idx], axis=0), np.array([label*np.ones(161) for label in labels[train_idx]]).flatten()
+        eeg_X_tmp, eeg_y_tmp = eeg_data[tmp_idx], labels[tmp_idx]
         
-        val_idx, test_idx = list(StratifiedKFold(n_splits=2).split(X_tmp, y_tmp))[0]
-        X_test, y_test = np.concatenate(X_tmp[test_idx], axis=0), np.array([label*np.ones(161) for label in y_tmp[test_idx]]).flatten()
-        X_val, y_val = np.concatenate(X_tmp[val_idx], axis=0), np.array([label*np.ones(161) for label in y_tmp[val_idx]]).flatten()
+        meg_X_train, meg_y_train = np.concatenate(meg_data[train_idx], axis=0), np.array([label*np.ones(161) for label in labels[train_idx]]).flatten()
+        meg_X_tmp, meg_y_tmp = meg_data[tmp_idx], labels[tmp_idx]
+        
+        val_idx, test_idx = list(StratifiedKFold(n_splits=2).split(eeg_X_tmp, eeg_y_tmp))[0]
+        
+        eeg_X_test, eeg_y_test = np.concatenate(eeg_X_tmp[test_idx], axis=0), np.array([label*np.ones(161) for label in eeg_y_tmp[test_idx]]).flatten()
+        eeg_X_val, eeg_y_val = np.concatenate(eeg_X_tmp[val_idx], axis=0), np.array([label*np.ones(161) for label in eeg_y_tmp[val_idx]]).flatten()
+        
+        meg_X_test, meg_y_test = np.concatenate(meg_X_tmp[test_idx], axis=0), np.array([label*np.ones(161) for label in meg_y_tmp[test_idx]]).flatten()
+        meg_X_val, meg_y_val = np.concatenate(meg_X_tmp[val_idx], axis=0), np.array([label*np.ones(161) for label in meg_y_tmp[val_idx]]).flatten()
 
-        data_dict = {'train': {'data': X_train.T, 'labels': y_train},
-                     'validation': {'data': X_val.T, 'labels': y_val},
-                     'test': {'data': X_test.T, 'labels': y_test}}
-        full_data.append(data_dict)
+        eeg_data_dict = {'train': {'data': eeg_X_train.T, 'labels': eeg_y_train},
+                     'validation': {'data': eeg_X_val.T, 'labels': eeg_y_val},
+                     'test': {'data': eeg_X_test.T, 'labels': eeg_y_test}}
         
-    return full_data
+        
+        meg_data_dict = {'train': {'data': meg_X_train.T, 'labels': meg_y_train},
+                     'validation': {'data': meg_X_val.T, 'labels': meg_y_val},
+                     'test': {'data': meg_X_test.T, 'labels': meg_y_test}}
+        
+        full_data_meg.append(eeg_data_dict)
+        full_data_eeg.append(meg_data_dict)
+        
+    return full_data_eeg, full_data_meg
 
 
 def load_data(artefact_removal=True):
@@ -107,7 +122,7 @@ def load_data(artefact_removal=True):
         meg = meg[0 == artefacts].copy()
         labels = labels[0 == artefacts].copy()
     
-    eeg_data, meg_data = _split_data(eeg, labels), _split_data(meg, labels)
+    eeg_data, meg_data = _split_data(eeg, meg, labels)
     
     return eeg_data, meg_data, labels
 
