@@ -50,12 +50,10 @@ def build_deepCCA_model(input_dims, hidden_layers, shared_dim, activation, learn
     return model
 
 
-def compute_loss(view1, view2):
+def compute_loss(view1, view2, r1=0, r2=0):
     V1 = tf.cast(view1, dtype=tf.float32)
     V2 = tf.cast(view2, dtype=tf.float32)
 
-    r1 = tf.cast(1e-4, dtype=tf.float32)
-    r2 = tf.cast(1e-2, dtype=tf.float32)
     eps = tf.cast(1e-5, dtype=tf.float32)
 
     assert V1.shape[0] == V2.shape[0]
@@ -76,6 +74,7 @@ def compute_loss(view1, view2):
     Sigma11_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma11))
     Sigma22_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma22))
     Sigma22_root_inv_T = tf.transpose(Sigma22_root_inv)
+    
     T = tf.matmul(tf.matmul(Sigma11_root_inv, Sigma12), Sigma22_root_inv_T)
     TT = tf.matmul(tf.transpose(T), T)
     reg_TT = tf.add(TT, eps*tf.eye(ddim))
@@ -84,11 +83,6 @@ def compute_loss(view1, view2):
 
 
 def compute_regularization(model, lambda_reg=1e-4):
-    reg_term = 0
-    for idx, trainable_var in enumerate(model.trainable_variables):
-        reg_term += tf.norm(trainable_var, ord=2)
-
-    return lambda_reg * reg_term
-
+    return lambda_reg * tf.math.reduce_sum([tf.norm(trainable_var, ord=2) for trainable_var in model.trainable_variables])
 
 

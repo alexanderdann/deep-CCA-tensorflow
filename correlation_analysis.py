@@ -4,12 +4,9 @@ import numpy as np
 import time
 
 
-def CCA(view1, view2):
+def CCA(view1, view2, r1=0, r2=0):
     V1 = tf.cast(view1, dtype=tf.float32)
     V2 = tf.cast(view2, dtype=tf.float32)
-
-    r1 = 0
-    r2 = 0
 
     assert V1.shape[0] == V2.shape[0]
     M = tf.constant(V1.shape[0], dtype=tf.float32)

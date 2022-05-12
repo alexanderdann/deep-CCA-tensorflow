@@ -9,9 +9,8 @@ from sklearn.metrics import accuracy_score
 """
     Used to suppress the warning related to very big dataset in the SVM and track_test_progress
 """
-from sklearn.utils.testing import ignore_warnings
+from sklearn.utils._testing import ignore_warnings
 from sklearn.exceptions import ConvergenceWarning
-
 
 def batch_data(data, batch_size):
     channels, samples = data.shape
@@ -53,38 +52,31 @@ def prepare_data(data, batch_size):
 def _split_data(eeg_data, meg_data, labels):
     '''
         A split of approximately 90/5/5 (training/validation/test) is fixed. 
-        Since we have 172 trials and flatten the data we need to increase the 
+        Since we have (137) 172 trials and flatten the data we need to increase the 
         size to new labels variables to fit the flattened version.
     '''
     
     full_data_eeg = list()
     full_data_meg = list()
-    for train_idx, tmp_idx in StratifiedKFold(n_splits=10).split(eeg_data, labels):
-        eeg_X_train, eeg_y_train = np.concatenate(eeg_data[train_idx], axis=0), np.array([label*np.ones(161) for label in labels[train_idx]]).flatten()
-        eeg_X_tmp, eeg_y_tmp = eeg_data[tmp_idx], labels[tmp_idx]
+    
+    for train_idx, tmp_idx in StratifiedKFold(n_splits=10).split(np.zeros(len(labels)), labels):
+        val_idx, test_idx = tmp_idx[:len(tmp_idx)//2], tmp_idx[len(tmp_idx)//2:]
         
-        meg_X_train, meg_y_train = np.concatenate(meg_data[train_idx], axis=0), np.array([label*np.ones(161) for label in labels[train_idx]]).flatten()
-        meg_X_tmp, meg_y_tmp = meg_data[tmp_idx], labels[tmp_idx]
+        for modality, data in [('eeg', eeg_data), ('meg', meg_data)]:
         
-        val_idx, test_idx = list(StratifiedKFold(n_splits=2).split(eeg_X_tmp, eeg_y_tmp))[0]
-        
-        eeg_X_test, eeg_y_test = np.concatenate(eeg_X_tmp[test_idx], axis=0), np.array([label*np.ones(161) for label in eeg_y_tmp[test_idx]]).flatten()
-        eeg_X_val, eeg_y_val = np.concatenate(eeg_X_tmp[val_idx], axis=0), np.array([label*np.ones(161) for label in eeg_y_tmp[val_idx]]).flatten()
-        
-        meg_X_test, meg_y_test = np.concatenate(meg_X_tmp[test_idx], axis=0), np.array([label*np.ones(161) for label in meg_y_tmp[test_idx]]).flatten()
-        meg_X_val, meg_y_val = np.concatenate(meg_X_tmp[val_idx], axis=0), np.array([label*np.ones(161) for label in meg_y_tmp[val_idx]]).flatten()
+            X_train, y_train = np.concatenate(data[train_idx], axis=0), np.array([label*np.ones(161) for label in labels[train_idx]]).flatten()
+            X_test, y_test = np.concatenate(data[test_idx], axis=0), np.array([label*np.ones(161) for label in labels[test_idx]]).flatten()
+            X_val, y_val = np.concatenate(data[val_idx], axis=0), np.array([label*np.ones(161) for label in labels[val_idx]]).flatten()
 
-        eeg_data_dict = {'train': {'data': eeg_X_train.T, 'labels': eeg_y_train},
-                     'validation': {'data': eeg_X_val.T, 'labels': eeg_y_val},
-                     'test': {'data': eeg_X_test.T, 'labels': eeg_y_test}}
-        
-        
-        meg_data_dict = {'train': {'data': meg_X_train.T, 'labels': meg_y_train},
-                     'validation': {'data': meg_X_val.T, 'labels': meg_y_val},
-                     'test': {'data': meg_X_test.T, 'labels': meg_y_test}}
-        
-        full_data_meg.append(eeg_data_dict)
-        full_data_eeg.append(meg_data_dict)
+            data_dict = {'train': {'data': X_train.T, 'labels': y_train},
+                         'validation': {'data': X_val.T, 'labels': y_val},
+                         'test': {'data': X_test.T, 'labels': y_test}}
+
+            if modality == 'eeg':
+                full_data_eeg.append(data_dict)
+                
+            elif modality == 'meg':
+                full_data_meg.append(data_dict)
         
     return full_data_eeg, full_data_meg
 
@@ -126,11 +118,11 @@ def load_data(artefact_removal=True):
     artefacts = scipy.io.loadmat('Data/artefacts.mat')['artefacts'].T[0]
     
     if artefact_removal:
-        eeg = eeg[0 == artefacts].copy()
-        meg = meg[0 == artefacts].copy()
-        labels = labels[0 == artefacts].copy()
+        eeg_r = eeg[0 == artefacts].copy()
+        meg_r = meg[0 == artefacts].copy()
+        labels_r = labels[0 == artefacts].copy()
     
-    eeg_data, meg_data = _split_data(eeg, meg, labels)
+    eeg_data, meg_data = _split_data(eeg_r, meg_r, labels_r)
     
     return eeg_data, meg_data, labels
 
@@ -158,16 +150,14 @@ def track_validation_progress(model, data, train_labels, validation_labels):
 @ignore_warnings(category=ConvergenceWarning)
 def track_test_progress(model, data, train_labels, validation_labels, test_labels):
     train_fy_1, train_fy_2 = model([data[0]['train'][0], data[1]['train'][0]])
-    train_fy = tf.concat([train_fy_1, train_fy_2], axis=1)
     val_fy_1, val_fy_2 = model([data[0]['validation'][0], data[1]['validation'][0]])
-    val_fy = tf.concat([val_fy_1, val_fy_2], axis=1)
-
-    test_fy_1, test_fy_2 = model([data[0]['test'][0], data[1]['test'][0]])
-    test_concat = tf.concat([test_fy_1, test_fy_2], axis=1)
     
     train_val_1 = tf.concat([train_fy_1, val_fy_1], axis=0)
     train_val_2 = tf.concat([train_fy_2, val_fy_2], axis=0)
     train_val_concat = tf.concat([train_val_1, train_val_2], axis=1)
+    
+    test_fy_1, test_fy_2 = model([data[0]['test'][0], data[1]['test'][0]])
+    test_concat = tf.concat([test_fy_1, test_fy_2], axis=1)
     
     train_val_labels = tf.concat([train_labels, validation_labels], axis=0)
     
