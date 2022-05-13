@@ -147,7 +147,7 @@ def train(hidden_layers, shared_dim, data, max_epochs, log_path, model_path, bat
     return track_test_progress(model, final_data, data[0]['train']['labels'], data[0]['validation']['labels'], data[0]['test']['labels'])
     
 
-desc = f'GridSearchSelectionLambdaNew'
+desc = f'GridSearchSelectionAdam'
 LOGROOT = f'{os.getcwd()}/LOG/{desc}'
 MODELSPATH = f'{os.getcwd()}/MODELS/{desc}'
 
@@ -165,8 +165,8 @@ num_folds = 1
 '''
 num_layers = [2, 3]
 shared_dims = [5, 10, 15]
-lambdas = [1e-1, 1e-2, 1e-3]
-cca_lambdas = [1e-2, 0]
+lambdas = [1e-2, 1e-3, 1e-4]
+cca_lambdas = [1e-2, 0.0]
 hidden_dims = [256, 512]
 activation_functions = ['sigmoid']
 
@@ -175,7 +175,7 @@ HP_SHARED_DIMENSION = hp.HParam('shared dimension', hp.Discrete(shared_dims))
 HP_HIDDEN_DIMENSION = hp.HParam('hidden dimension', hp.Discrete(hidden_dims))
 HP_ACTIVATION = hp.HParam('activation function', hp.Discrete(activation_functions))
 HP_LAMBDA = hp.HParam('lambda regularisation', hp.Discrete(lambdas))
-HP_CCA_LAMBDA = hp.HParam('cca regularisation', hp.Discrete(lambdas))
+HP_CCA_LAMBDA = hp.HParam('cca regularisation', hp.Discrete(cca_lambdas))
 
 
 METRIC_ACCURACY = 'Accuracy'

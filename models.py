@@ -27,7 +27,7 @@ def _create_mlp(input_dim, hidden_layers, shared_dim, view_idx, activation='sigm
     return input_layer, output_layer
             
     
-def build_deepCCA_model(input_dims, hidden_layers, shared_dim, activation, learning_rate=0.001, momentum_rate=0.0, display_model=False):
+def build_deepCCA_model(input_dims, hidden_layers, shared_dim, activation, learning_rate=0.001, display_model=False):
     '''
         input_dims:     type is list with integers, len(input_dims) >= 2
         hidden_layers:  type is list with integers for specifying nodes per layer, same for all views
@@ -42,7 +42,7 @@ def build_deepCCA_model(input_dims, hidden_layers, shared_dim, activation, learn
         output_layers.append(output_layer)
 
     model = tf.keras.Model(inputs=input_layers, outputs=output_layers, name='deepCCA')
-    model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=learning_rate, momentum=momentum_rate))
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
     model.summary()
     
     if display_model:
