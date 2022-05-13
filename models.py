@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.utils import plot_model
 import tensorflow_probability as tfp
+import numpy as np
 
         
 def _create_mlp(input_dim, hidden_layers, shared_dim, view_idx, activation='sigmoid'):
@@ -50,11 +51,9 @@ def build_deepCCA_model(input_dims, hidden_layers, shared_dim, activation, learn
     return model
 
 
-def compute_loss(view1, view2, r1=0, r2=0):
+def compute_loss(view1, view2, reg_param):
     V1 = tf.cast(view1, dtype=tf.float32)
     V2 = tf.cast(view2, dtype=tf.float32)
-
-    eps = tf.cast(1e-5, dtype=tf.float32)
 
     assert V1.shape[0] == V2.shape[0]
 
@@ -68,8 +67,8 @@ def compute_loss(view1, view2, r1=0, r2=0):
     V2_bar = V2 - tf.tile(meanV2, [M, 1])
 
     Sigma12 = tf.linalg.matmul(tf.transpose(V1_bar), V2_bar) / (M - 1)
-    Sigma11 = tf.add(tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) / (M - 1), r1 * tf.eye(ddim))
-    Sigma22 = tf.add(tf.linalg.matmul(tf.transpose(V2_bar), V2_bar) / (M - 1), r2 * tf.eye(ddim))
+    Sigma11 = tf.add(tf.linalg.matmul(tf.transpose(V1_bar), V1_bar) / (M - 1), reg_param * tf.eye(ddim))
+    Sigma22 = tf.add(tf.linalg.matmul(tf.transpose(V2_bar), V2_bar) / (M - 1), reg_param * tf.eye(ddim))
 
     Sigma11_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma11))
     Sigma22_root_inv = tf.linalg.sqrtm(tf.linalg.inv(Sigma22))
@@ -77,12 +76,17 @@ def compute_loss(view1, view2, r1=0, r2=0):
     
     T = tf.matmul(tf.matmul(Sigma11_root_inv, Sigma12), Sigma22_root_inv_T)
     TT = tf.matmul(tf.transpose(T), T)
-    reg_TT = tf.add(TT, eps*tf.eye(ddim))
-    corr = tf.linalg.trace(tf.linalg.sqrtm(reg_TT))
+    corr = tf.linalg.trace(tf.linalg.sqrtm(TT))
     return -corr
 
 
 def compute_regularization(model, lambda_reg=1e-4):
-    return lambda_reg * tf.math.reduce_sum([tf.norm(trainable_var, ord=2) for trainable_var in model.trainable_variables])
+    regularizer = tf.keras.regularizers.L2(lambda_reg)
+    W = np.array([])
+    
+    for trainable_var in model.trainable_variables:
+        W = np.append(W, tf.reshape(trainable_var, [-1]).numpy())
+            
+    return regularizer(tf.convert_to_tensor(W, dtype=tf.float32))
 
 
