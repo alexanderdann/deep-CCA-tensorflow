@@ -15,7 +15,7 @@ np.random.seed(3333)
 
 from tensorboard_utillities import write_scalar_summary, write_image_summary, write_PCC_summary, write_gradients_summary_mean, write_poly
 from tensorboard_utillities import create_grid_writer
-from utilities import load_data, prepare_data, track_validation_progress, track_test_progress
+from utilities import load_mlsp_data, prepare_data, track_test_progress, track_validation_progress
 
 
 
@@ -24,8 +24,9 @@ def train(hidden_layers, shared_dim, data, max_epochs, log_path, model_path, bat
         Used to capture information about architecture and log this information
     '''
     params = ['deepCCA', f'v{iter_idx}', 
-              f'{len(hidden_layers)} layers',
-              f'{hidden_layers[0]} nodes',
+              f'{len(hidden_layers[0])} layers',
+              f'{hidden_layers[0][0]} nodes',
+              f'{hidden_layers[1][0]} nodes',
               f'shared dim {shared_dim}',
               f'activation {activation}',
               f'lambda-reg {str(lambda_reg)}',
@@ -53,6 +54,7 @@ def train(hidden_layers, shared_dim, data, max_epochs, log_path, model_path, bat
     model = build_deepCCA_model(input_dims, hidden_layers, shared_dim, activation)
     termination_condition = False
     score_history = dict(zip(['validation'], [list()]))
+    model_loss = list()
     
     for epoch in range(max_epochs):
         if termination_condition:
@@ -69,21 +71,16 @@ def train(hidden_layers, shared_dim, data, max_epochs, log_path, model_path, bat
                 fy_1, fy_2 = model([batch_y1, batch_y2])
                 cca_loss = compute_loss(fy_1, fy_2, reg_param=cca_reg)
                 reg_loss = compute_regularization(model, lambda_reg=lambda_reg)
-                
-                '''
-                    Regularization loss can only be calculated after one epoch, thus the differentiation.
-                '''
+
                 loss = cca_loss + reg_loss
 
                 gradients = tape.gradient(loss, model.trainable_variables)
                 model.optimizer.apply_gradients(zip(gradients, model.trainable_variables))
                 intermediate_outputs.append((fy_1, fy_2))
+                model_loss.append(loss)
             
             
-        if epoch % 10 == 0:
-            '''
-                Using all data to track the SVM accuracy and different losses over time in TensorBoard.
-            '''
+        if epoch % 1 == 0:
             validation_score = track_validation_progress(model, final_data, data[0]['train']['labels'], data[0]['validation']['labels'])
             score_history['validation'].append(validation_score)
             
@@ -100,10 +97,10 @@ def train(hidden_layers, shared_dim, data, max_epochs, log_path, model_path, bat
             )
         
         
-        '''
-            Tracking the canonical correlations every 75 epochs in TensorBoard.
-        '''
-        if epoch % 100 == 0:
+            '''
+                Tracking the canonical correlations every 75 epochs in TensorBoard.
+            '''
+        #if epoch % 100 == 0:
             tmp = list()
             for batch_idx in range(batch_sizes['train']):
                 batched_fy_1, batched_fy_2 = intermediate_outputs[batch_idx]
@@ -118,17 +115,21 @@ def train(hidden_layers, shared_dim, data, max_epochs, log_path, model_path, bat
                 epoch=epoch,
                 list_of_tuples=dynamic_part
             )
-        '''
-            Calculating the termination condition by looking at the accuracy of 
-            past values in score_history['validation'].
-            Personal notion is that this is not optimal.
-        '''
+            '''
+                Calculating the termination condition by looking at the accuracy of 
+                past values in score_history['validation'].
+                Personal notion is that this is not optimal.
+            '''
         if epoch > 100:
-            #(c1, _) = np.polyfit(np.arange(1000), score_history['validation'][-1000:], deg=1)
-            if (tf.math.reduce_std(score_history['validation'][-100:]) < 1e-3): #or (c1 < 0):
-                std = tf.math.reduce_std(score_history['validation'][-100:])
-                #print(f'Termination reached. \nStandard deviation: {std} \nTendency for last 1000 samples: {c1}\n')
+            if (tf.math.reduce_std(score_history['validation'][-100:]) < 1e-4): 
                 termination_condition = True
+                
+                
+            ##(c1, _) = np.polyfit(np.arange(1000), score_history['validation'][-1000:], deg=1)
+            #if (tf.math.reduce_std(score_history['validation'][-100:]) < 1e-3): #or (c1 < 0):
+            #    std = tf.math.reduce_std(score_history['validation'][-100:])
+            #    #print(f'Termination reached. \nStandard deviation: {std} \nTendency for last 1000 samples: {c1}\n')
+            #    termination_condition = True
     
     '''
         Save the whole architecture in a final step.
@@ -147,7 +148,7 @@ def train(hidden_layers, shared_dim, data, max_epochs, log_path, model_path, bat
     return track_test_progress(model, final_data, data[0]['train']['labels'], data[0]['validation']['labels'], data[0]['test']['labels'])
     
 
-desc = f'GridSearchSelectionAdam'
+desc = f'GridSearchMLSP'
 LOGROOT = f'{os.getcwd()}/LOG/{desc}'
 MODELSPATH = f'{os.getcwd()}/MODELS/{desc}'
 
@@ -155,24 +156,27 @@ MODELSPATH = f'{os.getcwd()}/MODELS/{desc}'
     Loading .mat files and removing trials with artefacts. Output is a dict containing data and labels
     for training, validation and test. Important: Numpy arrays and not final form of data which is fed into network.
 '''
-eeg_data, meg_data, labels = load_data(artefact_removal=True)
-num_folds = 1
+#eeg_data, meg_data, labels = load_data(artefact_removal=True)
+fnc_data, sbm_data, labels = load_mlsp_data()
+num_folds = 8
 
 
 '''
     Defining hyperparameters and its values. Using TensorBoards integrated HParam to track and visualize 
     progress in TensorBoard.
 '''
-num_layers = [2, 3]
-shared_dims = [5, 10, 15]
-lambdas = [1e-2, 1e-3, 1e-4]
-cca_lambdas = [1e-2, 0.0]
-hidden_dims = [256, 512]
+num_layers = [2, 3, 4, 5]
+shared_dims = [10, 15, 25, 50, 75, 100, 125]
+lambdas = [1e-3, 1e-4, 1e-5]
+cca_lambdas = [0.0]
+hidden_dims_view_1 = [64, 128, 256]
+hidden_dims_view_2 = [256, 512, 1024]
 activation_functions = ['sigmoid']
 
 HP_NUM_LAYERS = hp.HParam('number of layers', hp.Discrete(num_layers))
 HP_SHARED_DIMENSION = hp.HParam('shared dimension', hp.Discrete(shared_dims))
-HP_HIDDEN_DIMENSION = hp.HParam('hidden dimension', hp.Discrete(hidden_dims))
+HP_HIDDEN_DIMENSION_1 = hp.HParam('hidden dimension 1', hp.Discrete(hidden_dims_view_1))
+HP_HIDDEN_DIMENSION_2 = hp.HParam('hidden dimension 2', hp.Discrete(hidden_dims_view_2))
 HP_ACTIVATION = hp.HParam('activation function', hp.Discrete(activation_functions))
 HP_LAMBDA = hp.HParam('lambda regularisation', hp.Discrete(lambdas))
 HP_CCA_LAMBDA = hp.HParam('cca regularisation', hp.Discrete(cca_lambdas))
@@ -182,28 +186,32 @@ METRIC_ACCURACY = 'Accuracy'
 
 with tf.summary.create_file_writer(LOGROOT).as_default():
     hp.hparams_config(
-    hparams=[HP_NUM_LAYERS, HP_HIDDEN_DIMENSION, HP_SHARED_DIMENSION, HP_ACTIVATION, HP_LAMBDA, HP_CCA_LAMBDA],
+    hparams=[HP_NUM_LAYERS, HP_SHARED_DIMENSION, HP_HIDDEN_DIMENSION_1, HP_HIDDEN_DIMENSION_2, HP_ACTIVATION, HP_LAMBDA, HP_CCA_LAMBDA],
     metrics=[hp.Metric(METRIC_ACCURACY, display_name=f'Mean SVM accuracy over {num_folds}-folds')],
   )
 
 def start_grid_search(hparams):
     '''
         Running gridsearch for a specific combination and resetting the seed to minimize random effects.
-        In case an error is happening we just append a 0 as the accuracy for this run and we whole gridsearch
-        does not crash.
+        In case an error is happening we append a zero as the accuracy for this run.
     '''
     tf.random.set_seed(3333)
     accs = list()
     for fold_idx in range(num_folds):
         
+        hidden_layers = [
+            [hparams[HP_HIDDEN_DIMENSION_1] for _ in range(hparams[HP_NUM_LAYERS])],
+            [hparams[HP_HIDDEN_DIMENSION_2] for _ in range(hparams[HP_NUM_LAYERS])]
+        ]
+            
         try:
-            fin_acc = train(hidden_layers=[hparams[HP_HIDDEN_DIMENSION] for _ in range(hparams[HP_NUM_LAYERS])], 
+            fin_acc = train(hidden_layers=hidden_layers, 
                             shared_dim=hparams[HP_SHARED_DIMENSION],
                             activation=hparams[HP_ACTIVATION],
                             lambda_reg=hparams[HP_LAMBDA],
                             cca_reg=hparams[HP_CCA_LAMBDA],
-                            data=[eeg_data[fold_idx], meg_data[fold_idx]],
-                            max_epochs=5000, 
+                            data=[fnc_data[fold_idx], sbm_data[fold_idx]],
+                            max_epochs=1000, 
                             log_path=LOGPATH, model_path=MODELSPATH, 
                             batch_size=None, 
                             iter_idx=fold_idx)
@@ -211,7 +219,7 @@ def start_grid_search(hparams):
             accs.append(fin_acc)
         
         except Exception as e:
-            print(e)
+            print(f'**** EXCEPTION ****\n{e}\n****\n')
             accs.append(0)
             
     return tf.math.reduce_mean(accs)
@@ -226,21 +234,23 @@ def run(log_path, hparams):
         
 session_num = 0
 for num_layers_idx, num_layers in enumerate(HP_NUM_LAYERS.domain.values, 0):
-    for hdim_idx, hdim in enumerate(HP_HIDDEN_DIMENSION.domain.values, 0):
-        for sdim_idx, sdim in enumerate(HP_SHARED_DIMENSION.domain.values, 0):
-            for afunc_idx, afunc in enumerate(HP_ACTIVATION.domain.values, 0):
-                for lambda_idx, lambda_val in enumerate(HP_LAMBDA.domain.values, 0):
-                    for cca_lambda_idx, cca_lambda_val in enumerate(HP_CCA_LAMBDA.domain.values, 0):
-                        hparams = {
-                            HP_NUM_LAYERS: num_layers,
-                            HP_HIDDEN_DIMENSION: hdim,
-                            HP_SHARED_DIMENSION: sdim,
-                            HP_ACTIVATION: afunc,
-                            HP_LAMBDA: lambda_val,
-                            HP_CCA_LAMBDA: cca_lambda_val
-                        }
+    for hdim1_idx, hdim1 in enumerate(HP_HIDDEN_DIMENSION_1.domain.values, 0):
+        for hdim2_idx, hdim2 in enumerate(HP_HIDDEN_DIMENSION_2.domain.values, 0):
+            for sdim_idx, sdim in enumerate(HP_SHARED_DIMENSION.domain.values, 0):
+                for afunc_idx, afunc in enumerate(HP_ACTIVATION.domain.values, 0):
+                    for lambda_idx, lambda_val in enumerate(HP_LAMBDA.domain.values, 0):
+                        for cca_lambda_idx, cca_lambda_val in enumerate(HP_CCA_LAMBDA.domain.values, 0):
+                            hparams = {
+                                HP_NUM_LAYERS: num_layers,
+                                HP_HIDDEN_DIMENSION_1: hdim1,
+                                HP_HIDDEN_DIMENSION_2: hdim2,
+                                HP_SHARED_DIMENSION: sdim,
+                                HP_ACTIVATION: afunc,
+                                HP_LAMBDA: lambda_val,
+                                HP_CCA_LAMBDA: cca_lambda_val
+                            }
 
-                        LOGPATH = f'{LOGROOT}/Grid {session_num}'
-                        run(LOGPATH, hparams)
+                            LOGPATH = f'{LOGROOT}/Grid {session_num}'
+                            run(LOGPATH, hparams)
 
-                        session_num += 1
+                            session_num += 1

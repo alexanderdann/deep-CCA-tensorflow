@@ -11,7 +11,7 @@ def _create_mlp(input_dim, hidden_layers, shared_dim, view_idx, activation='sigm
     '''
     input_layer = tf.keras.Input(shape=(input_dim, ), name=f'view{view_idx}_input_layer')
     
-    for layer_idx, layer_dim in enumerate(hidden_layers, start=1):
+    for layer_idx, layer_dim in enumerate(hidden_layers[view_idx], start=1):
         if layer_idx == 1:
             tmp_hidden_layer = tf.keras.layers.Dense(layer_dim, activation, name=f'view_{view_idx}_hidden_layer_{layer_idx}')\
             (input_layer)
